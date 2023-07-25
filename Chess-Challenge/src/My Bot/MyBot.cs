@@ -37,12 +37,27 @@ public class MyBot : IChessBot
             // and add to the score of the move if it is already added
             if (moveScores.ContainsKey(move))
             {
-                moveScores[move] += pieceDevelopment(board);
+                moveScores[move] += pieceDevelopment(board, move);
             }
             else
             {
-                moveScores.Add(move, pieceDevelopment(board));
+                moveScores.Add(move, pieceDevelopment(board, move));
             }
+
+            // We also check if the move helps in pawn structure
+            if (move.MovePieceType == PieceType.Pawn)
+            {
+                if (moveScores.ContainsKey(move))
+                {
+                    moveScores[move] += pawnStructure(board, move);
+                }
+                else
+                {
+                    moveScores.Add(move, pawnStructure(board, move));
+                }
+            }
+
+
         }
 
         // Lastly, we choose the move with the highest score
@@ -86,15 +101,10 @@ public class MyBot : IChessBot
 
         if (move.IsCastles)
         {
-            return 1000;
-        }
-
-        // Check if King is in check
-        if (board.IsInCheck())
-        {
-            return -10000;
+            return 600;
         }
         return 0;
+
     }
 
     // Function to decide whether to capture 
@@ -107,10 +117,18 @@ public class MyBot : IChessBot
     }
 
     // Function to evaluate piece development
-    public int pieceDevelopment(Board board)
+    public int pieceDevelopment(Board board, Move move)
     {
         // We can evaluate this by moving the move then 
         // checking how many possible moves the piece has now
+
+        // For piece development
+        // 1. We want to develop our pieces to the center
+        // 2. We want to develop our pieces to squares where they can attack
+        if (board.SquareIsAttackedByOpponent(move.TargetSquare))
+        {
+            return -100;
+        }
         return 0;
     }
 
@@ -119,6 +137,33 @@ public class MyBot : IChessBot
     {
         // We can evaluate this by moving the move then 
         // checking how many pawns are protecting other pawns
+
+        // For pawns, we want to achieve 2 things
+        // 1. Have pawns controlling the center
+        // 2. Have pawns protecting other pawns
+        if (move.Equals(new Move("e2e4", board)) && (board.PlyCount == 0))
+        {
+            return 1000;
+        }
+        var pawnMoveScore = 0;
+        board.MakeMove(move);
+        pawnMoveScore = board.GetLegalMoves(true).Length;
+        board.UndoMove(move);
+        return pawnMoveScore;
+    }
+
+    public int tempoAttack(Board board, Move move)
+    {
+        board.MakeMove(move);
+        if (board.IsInCheckmate())
+        {
+            board.UndoMove(move);
+            return 10000;
+        } else if (board.IsInCheck())
+        {
+            board.UndoMove(move);
+            return 400;
+        }
         return 0;
     }
 
