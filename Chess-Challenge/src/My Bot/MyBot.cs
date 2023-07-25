@@ -6,17 +6,25 @@ using System.Linq;
 public class MyBot : IChessBot
 {
     public int[] pieceValues = { 0, 100, 300, 300, 500, 900, 10000 };
+    Stack<Move> moveHistory = new Stack<Move>();
 
     public Move Think(Board board, Timer timer)
     {
         Move[] moves = board.GetLegalMoves();
         Dictionary<Move, int> moveScores = new Dictionary<Move, int>();
+        var bestMove = moves[0];
 
         foreach (Move move in moves)
         {
             // For each move, we see how it improves King Safety
             // and save the score to a dictionary
             moveScores.Add(move, kingSafety(board, move));
+
+            if (MoveIsCheckmate(board, move))
+            {
+                bestMove = move;
+                break;
+            }
 
             // If the move is a capture, 
             // we also see how much material it gains
@@ -35,13 +43,16 @@ public class MyBot : IChessBot
 
             // We also check if the move helps in development
             // and add to the score of the move if it is already added
-            if (moveScores.ContainsKey(move))
+            if (move.MovePieceType != PieceType.Pawn)
             {
-                moveScores[move] += pieceDevelopment(board, move);
-            }
-            else
-            {
-                moveScores.Add(move, pieceDevelopment(board, move));
+                if (moveScores.ContainsKey(move))
+                {
+                    moveScores[move] += pieceDevelopment(board, move);
+                }
+                else
+                {
+                    moveScores.Add(move, pieceDevelopment(board, move));
+                }
             }
 
             // We also check if the move helps in pawn structure
@@ -61,8 +72,24 @@ public class MyBot : IChessBot
         }
 
         // Lastly, we choose the move with the highest score
-        var bestMove = moveScores.Aggregate((x, y) => x.Value > y.Value ? x : y).Key;
+        bestMove = moveScores.Aggregate((x, y) => x.Value > y.Value ? x : y).Key;
         Console.WriteLine(moveScores[bestMove]);
+
+        // !! Explore vs Exploit !!
+        // We can also add a random factor to the move 
+        // Since it is a draw if we keep playing the same move, 
+        // if we have played the same move twice, 
+        // we can choose a random move instead
+
+        if (moveHistory.Count > 1)
+        {
+            if (moveHistory.Peek().Equals(bestMove))
+            {
+                Random rng = new();
+                bestMove = moves[rng.Next(moves.Length)];
+            }
+        }
+        moveHistory.Push(bestMove);
         return bestMove;
     }
 
@@ -113,6 +140,10 @@ public class MyBot : IChessBot
         // Find capture value of piece
         Piece capturedPiece = board.GetPiece(move.TargetSquare);
         int capturedPieceValue = pieceValues[(int)capturedPiece.PieceType];
+        if (board.SquareIsAttackedByOpponent(move.TargetSquare))
+        {
+            return capturedPieceValue - pieceValues[(int)move.MovePieceType];
+        }
         return capturedPieceValue;
     }
 
@@ -129,6 +160,12 @@ public class MyBot : IChessBot
         {
             return -100;
         }
+
+        // TODO
+        // Move piece away if being attacked by weaker piece
+        // and is not defended
+        // Develop pieces to center
+
         return 0;
     }
 
@@ -149,11 +186,16 @@ public class MyBot : IChessBot
         board.MakeMove(move);
         pawnMoveScore = board.GetLegalMoves(true).Length;
         board.UndoMove(move);
+
+        // TODO
+        // Have pawn control center
         return pawnMoveScore;
     }
 
     public int tempoAttack(Board board, Move move)
     {
+        // TODO
+        // FIXME. Getting Null Error
         board.MakeMove(move);
         if (board.IsInCheckmate())
         {
@@ -165,6 +207,17 @@ public class MyBot : IChessBot
             return 400;
         }
         return 0;
+    }
+
+    bool MoveIsCheckmate(Board board, Move move)
+    {
+        board.MakeMove(move);
+        bool isMate = board.IsInCheckmate();
+        board.UndoMove(move);
+        // TODO
+        // Checkmate with Queen and King
+        // Checkmate with Rook and King
+        return isMate;
     }
 
 }
